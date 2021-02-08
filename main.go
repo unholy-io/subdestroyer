@@ -1,6 +1,8 @@
 package main
 
 import (
+  "os"
+  "flag"
   "net/http"
   "fmt"
   "log"
@@ -26,13 +28,22 @@ type Cert struct {
 var subdomains []string
 
 func main() {
-  GetCerts("playstation.net")
-
   var wg sync.WaitGroup
+  wg.Add(1)
+
+  targetFlag := flag.String("t", "", "the target")
+  flag.Parse()
+
+  if *targetFlag == "" {
+    fmt.Printf("\nYou must provide a target e.g., -t http://example.com\n\n")
+    os.Exit(1)
+  }
+
+  GetCerts(*targetFlag, &wg)
 
   for _, subdomain := range subdomains {
     wg.Add(1)
-    go GetCerts2(strings.Replace(subdomain, "*.", "", -1), &wg)
+    go GetCerts(strings.Replace(subdomain, "*.", "", -1), &wg)
   }
 
   wg.Wait()
@@ -40,34 +51,7 @@ func main() {
   Output(subdomains)
 }
 
-func GetCerts(target string) {
-
-  // make a sample HTTP GET request
-  url := fmt.Sprintf("https://crt.sh/?Identity=%%.%s&output=json", target)
-  res, err := http.Get(url)
-
-  // check for response error
-  if err != nil {
-    log.Fatal( err )
-  }
-
-  // read all response body
-  data, _ := ioutil.ReadAll( res.Body )
-
-  // close response body
-  res.Body.Close()
-
-  // unmarshall and print data
-  var certs []Cert
-
-  json.Unmarshal([]byte(data), &certs)
-
-  subdomains = append(subdomains, RemoveDuplicatesFromSlice(certs)...)
-
-}
-
-// GetCerts2 needs a new name ...
-func GetCerts2(target string, wg *sync.WaitGroup) {
+func GetCerts(target string, wg *sync.WaitGroup) {
   defer wg.Done()
 
   // make a sample HTTP GET request
@@ -100,7 +84,9 @@ func Recurse() {
 
 func Output(results []string) {
   for _, element := range results {
-    fmt.Println(strings.Replace(element, "*.", "", -1))
+    if len(element) != 0 {
+      fmt.Println(strings.Replace(element, "*.", "", -1))
+    }
   }
 }
 
@@ -114,7 +100,7 @@ func RemoveDuplicatesFromSlice(c []Cert) []string {
   }
 
   var result []string
-  for item, _ := range m {
+  for item := range m {
     result = append(result, item)
   }
   return result
